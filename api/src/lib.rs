@@ -3,6 +3,7 @@
 //! ports to adapters via `AppState`.
 
 mod error;
+mod extract;
 mod openapi;
 mod routes;
 mod spa;
@@ -34,7 +35,10 @@ pub use state::AppState;
 pub fn build_router(state: AppState, web_dist_dir: &str) -> Router {
     let api = Router::new()
         .route("/health", get(routes::health::health))
-        .route("/tasks", get(routes::tasks::list_tasks))
+        .route(
+            "/tasks",
+            get(routes::tasks::list_tasks).post(routes::tasks::create_task),
+        )
         .route("/openapi.json", get(routes::openapi_json))
         .fallback(routes::not_found)
         .with_state(state);

@@ -1,3 +1,4 @@
+use axum::extract::rejection::JsonRejection;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -71,6 +72,23 @@ impl From<ApplicationError> for ApiError {
                 None,
             ),
         }
+    }
+}
+
+impl From<JsonRejection> for ApiError {
+    /// Map request-body extractor rejections to RFC7807 (never axum's default
+    /// text/plain). A missing/incorrect `Content-Type` is 415; every other bad body
+    /// (malformed JSON syntax, schema mismatch, unreadable bytes) folds into 400, so
+    /// "any bad request body" is consistently 400 — matching the domain-invalid path.
+    /// The rejection's own message is client-facing input feedback, safe to surface.
+    fn from(rejection: JsonRejection) -> Self {
+        let (status, title) = match &rejection {
+            JsonRejection::MissingJsonContentType(_) => {
+                (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type")
+            }
+            _ => (StatusCode::BAD_REQUEST, "Bad Request"),
+        };
+        ApiError::new(status, title, Some(rejection.body_text()))
     }
 }
 

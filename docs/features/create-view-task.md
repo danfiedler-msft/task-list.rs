@@ -92,7 +92,7 @@ Bhaskar validates; Anders design-reviews; JARVIS handles all git.
 | # | Task Description | Status | Commit |
 |---|------------------|--------|--------|
 | 0 | **Persistence foundation (carried from the Cosmos spike).** Commit the already-built `TaskRepository` create/get/update + `CosmosTaskRepository` + `Task.version` ETag + `ApplicationError::Conflict`(409) + CI integration job (Linux emulator container) that came over from bootstrap. Verify green (fmt/clippy/tests, drift). | Pending | - |
-| 1 | **Backend create endpoint.** application: `CreateTaskRequest` DTO + `tasks::create` use-case (validate title, mint id, default `Todo`, clock, `repo.create`) + unit tests vs in-memory fake. api: `POST /api/tasks` → 201 `TaskDto` (400 on invalid), utoipa path + schema, regen `openapi.json` + typed client (drift green), axum HTTP tests (201 / 400 / then-listed). | Pending | - |
+| 1 | **Backend create endpoint.** application: `CreateTaskRequest` DTO + `tasks::create` use-case (validate title, mint id, default `Todo`, clock, `repo.create`) + unit tests vs in-memory fake. api: `POST /api/tasks` → 201 `TaskDto` (400 on invalid), utoipa path + schema, regen `openapi.json` + typed client (drift green), axum HTTP tests (201 / 400 / then-listed). | ✅ Done | (feature PR) |
 | 2 | **Create form + task list UI.** web: `createTask` in the façade (+POST JSON in `apiFetch`); Tasks page — create-form (client-side title validation mirroring the domain) + list with loading/empty/error, **optimistic append** on success; replace skeleton cards. Unit tests for form + list states. | Pending | - |
 | 3 | **Local-dev Cosmos gate + native-Windows docs.** `session-startup.ps1`: a **conditional** preflight that waits for the Cosmos emulator only when the local app runs in Cosmos mode (`TASKLIST_PERSISTENCE=cosmos`) — never blocks the default in-memory loop; probe the **native Windows Cosmos DB Emulator** (`https://localhost:8081`). README: **native Windows** emulator install/start steps. No domain/app/api code; hermetic tests/CI unchanged. | Pending | - |
 
@@ -108,6 +108,32 @@ _(from the carried-forward Cosmos spike — to be committed in Task 0)_
 - **api:** RFC7807 mapping gained the 409 arm.
 - **config/composition:** `Persistence` enum (`TASKLIST_PERSISTENCE`, default `memory`) + `CosmosSettings`; `TASKLIST_ENV=local`→emulator, `cloud`→token credential; `build_state` selects Cosmos vs in-memory.
 - **CI:** a separate `integration` job runs the Cosmos **Linux** emulator as a service container (CI stays on Linux runners); local dev uses the **native Windows** emulator.
+
+## Review Log
+
+### Task 1 — backend create endpoint (2026-07-09)
+- **Bhaskar (verify): PASS** — fmt/clippy(-D warnings)/tests green; **+8 tests** (application 7, api http 7);
+  release build ✓; OpenAPI drift **byte-identical** (client regenerated, not hand-edited); full web gate
+  (lint/typecheck/vitest/build) ✓; live smoke confirms contract (201 trimmed + Todo + no Location; 400
+  problem+json); **no layering violation** (`application` has no `infrastructure` dep — in-crate FakeRepo).
+- **Anders (design review): APPROVE-WITH-SUGGESTIONS** — faithfully realizes Option 1; rulings honored.
+  - **Finding 1 (⏳ Mr. Das's ruling):** structural body rejections bypass RFC7807 — axum's `Json` extractor
+    returns non-problem+json on missing `title` (422 text/plain), malformed JSON (400 text/plain), missing
+    `Content-Type` (415 text/plain). Only the *domain-invalid* title path yields 400 problem+json. This is the
+    **first mutation endpoint**, so it's the moment to set the shared `JsonRejection → RFC7807` seam once.
+    **Not a blocker** for Task 1's stated contract. Anders rec: **fix now**.
+  - **Finding 2 (Anders ruled):** keep default/lenient serde on `CreateTaskRequest` (no `deny_unknown_fields`) —
+    liberal-in-what-you-accept, forward-compatible. No change.
+  - **Finding 3 (carry-forward to Task 2):** `createTask` MUST send `Content-Type: application/json` +
+    `JSON.stringify(body)` or axum returns 415. (Today's `apiFetch` sets only `Accept`.)
+  - Bonus: the 201 returns a **fully server-stamped `TaskDto`**, so Task 2's optimistic append can use it
+    directly — no refetch needed.
+- **Finding 1 — RULED fix-now (Mr. Das) & DONE.** Dave added a reusable RFC7807-on-body-rejection seam:
+  `From<JsonRejection> for ApiError` + a thin `crate::extract::Json<T>` wrapper (both `create_task` and
+  `list_tasks` route through it, so every future mutation endpoint inherits it). Mapping (all problem+json):
+  missing `Content-Type`→415; malformed JSON / missing-blank-wrong-type field / bytes→400 (no bare 422);
+  201 + domain-invalid-400 unchanged. OpenAPI documents 201/400/415; client regenerated. **Bhaskar re-verify:
+  PASS** (api http 7→10, drift byte-identical, web gate green, seam genuinely shared, no layering regression).
 
 ## Notes & Decisions
 
