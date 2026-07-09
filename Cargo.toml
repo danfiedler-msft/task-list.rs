@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = ["domain", "application", "infrastructure", "api"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+
+[workspace.dependencies]
+# Internal crates (dependency flow: domain <- application <- infrastructure/api)
+tasklist-domain = { path = "domain" }
+tasklist-application = { path = "application" }
+tasklist-infrastructure = { path = "infrastructure" }
+
+# Async runtime + HTTP
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+
+# Serialization, errors, ids, time
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+async-trait = "0.1"
+uuid = { version = "1", features = ["v7"] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
+
+# OpenAPI (utoipa -> openapi-typescript on the web side)
+utoipa = { version = "5", features = ["time", "uuid"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+
+# Telemetry seam (skeleton: tracing only; App Insights lands in a later task)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+debug = true

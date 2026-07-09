@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Node / web
+node_modules/
+web/dist/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite / test coverage
+.vite/
+coverage/
+
+# Editors / OS
+.vs/
+.idea/
+*.swp
+.DS_Store
+
+# Local development secrets & dev-state (never commit)
+scripts/dev-secrets.local.ps1
+.env.local
+scripts/.dev-state.json
+scripts/.dev-app.pid
+scripts/.liveness-watch.pid
+scripts/liveness-watch.log

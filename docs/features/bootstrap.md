@@ -8,9 +8,9 @@
 > final app will use, with placeholder/stub logic where real task-management features come later. It
 > proves the whole pipeline is wired — it does **not** deliver task features.
 >
-> **Source of truth:** `docs/architecture.md` (final, all rulings baked in). This spec does not restate
-> the architecture; it sequences its realization. Where they differ, architecture.md wins — except the
-> two deliberate reconciliations called out in **Notes & Decisions** (IaC dir, guardrail wording).
+> **Source of truth:** `docs/design.md` (the merged authoritative design + rules, all rulings baked in).
+> This spec does not restate the design; it sequences its realization. The two deliberate reconciliations
+> are called out in **Notes & Decisions** (IaC dir, guardrail wording).
 
 ---
 
@@ -44,7 +44,7 @@
 
 ## Selected Design
 
-**Option 1 — walking skeleton, risk-ordered.** Realizes `docs/architecture.md` as follows:
+**Option 1 — walking skeleton, risk-ordered.** Realizes `docs/design.md` as follows:
 
 - **Layering (§1, §2):** Cargo workspace, four crates `tasklist-{domain,application,infrastructure,api}`,
   dependency flow `domain ← application ← infrastructure/api`. Ports (`TaskRepository`, `BlobStore`,
@@ -54,13 +54,13 @@
   port — **in-memory fake first (Task 1)**, swapped to the real Cosmos adapter (Task 2) with no
   domain/application change. This is the concrete DIP demonstration.
 - **Risk-first sequencing:** the preview `azure_data_cosmos` etag round-trip against the **Cosmos
-  emulator** (architecture §0, §7 #1 — the highest-uncertainty dependency) is proven in **Task 2**,
+  emulator** (design.md — Risks/observations: the Cosmos preview-SDK risk, the highest-uncertainty dependency) is proven in **Task 2**,
   immediately after the skeleton, before anything is built on it.
 - **One concern per task thereafter:** Blob/Azurite → Auth0+Google cookie BFF → App Insights telemetry →
   installable PWA + Dexie stub → IaC (Bicep) + managed identity + Key Vault + single Production deploy.
 - **Doc reset:** author fresh `docs/design.md` (terse project map + hard rules for the Rust stack) in
-  Task 1; it evolves as tasks land. Rewrite `README.md`, `cargo.toml`, `.gitignore`, `.editorconfig`,
-  the `scripts/*`, and the `.github/skills/*` from the .NET toolchain to cargo + Vite.
+  Task 1; it evolves as tasks land. Rewrite `README.md`, `Cargo.toml`, `.gitignore`, `.editorconfig`,
+  the `scripts/*`, and the `.github/skills/*` to the cargo + Vite toolchain.
 - **Local dev is first-class:** keep the `set-dev-state.ps1` / `.dev-state.json` lifecycle mechanism and
   the `GET /api/health` contract unchanged (Dave guardrail #8 and the liveness watch depend on them);
   repurpose `dev.ps1`/`run-app.ps1`/`session-startup.ps1` to `cargo watch` + Vite + a docker-compose for
@@ -77,7 +77,7 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
 
 | #  | Task Description                                                                          | Status  | Commit |
 |----|------------------------------------------------------------------------------------------|---------|--------|
-| 1  | Workspace + doc reset + walking skeleton (`/api/health` e2e via port) + CI green          | Pending | -      |
+| 1  | Workspace + doc reset + walking skeleton (`/api/health` e2e via port) + CI green          | Verified ✓ — awaiting commit | -      |
 | 2  | Cosmos preview-crate spike: real etag round-trip via `TaskRepository` on the emulator      | Pending | -      |
 | 3  | Blob stub upload/download through `BlobStore` against Azurite (image plumbing)             | Pending | -      |
 | 4  | Auth0 + Google cookie BFF: OIDC login/callback/logout + session, protecting an endpoint    | Pending | -      |
@@ -88,7 +88,7 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
 
 ### Task 1 — Workspace + doc reset + walking skeleton + CI green
 **Scope**
-- Cargo workspace: `cargo.toml [workspace]` with members `domain`, `application`, `infrastructure`,
+- Cargo workspace: `Cargo.toml [workspace]` with members `domain`, `application`, `infrastructure`,
   `api`, and shared `[workspace.dependencies]`; packages `tasklist-{domain,application,infrastructure,api}`
   (`api` = binary). Dependency flow enforced per §2.1.
 - `domain`: minimal `Task` entity + newtypes (`TaskId` uuidv7, `UserId`, `Title`) + `TaskStatus` + domain
@@ -97,7 +97,7 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
   caller) + DTOs.
 - `infrastructure`: `InMemoryTaskRepository` (impl `TaskRepository`) + `SystemClock`; config loader stub
   with `TASKLIST_ENV` seam.
-- `api`: axum host; `GET /api/health` → 200 `{status:"ok"}`; the trivial use-case wired through the port
+- `api`: axum host; `GET /api/health` → 200 `{status,time}`; the trivial use-case wired through the port
   (proves DIP); `utoipa` OpenAPI doc + `/api/openapi.json` (+ swagger UI); static-file serving + SPA
   fallback (`index.html`); RFC7807 error mapping seam; composition root builds `AppState` with the
   in-memory repo. **No Azure crates yet.**
@@ -105,12 +105,12 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
   health indicator + placeholder auth-state area. `openapi-typescript` generates
   `web/src/ApiClient.generated.ts` from the OpenAPI doc (never hand-edited); base fetch wrapper; Vite dev
   proxy `/api/*` → backend (same-origin).
-- **Doc reset:** author `docs/design.md` (terse source-of-truth project map + hard rules for this stack,
-  mirroring the old Nucleus one's role); rewrite `README.md` (Rust/React stack), `cargo.toml`,
+- **Doc reset:** author `docs/design.md` (terse source-of-truth project map + hard rules for this stack);
+  rewrite `README.md` (Rust/React stack), `Cargo.toml`,
   `.gitignore` (Rust `target/`, Node `node_modules/`, `dist/`, keep the dev-secret/state ignores),
   `.editorconfig` (Rust/TS).
 - **Scripts (repurpose, keep the contract):** `dev.ps1` → dot-source local secrets then run
-  `cargo watch -x 'run -p tasklist-api'` **+** `npm --prefix web run dev`; drop the `dotnet dev-certs`
+  `cargo watch -x 'run -p tasklist-api'` **+** `npm --prefix web run dev`; drop the legacy HTTPS dev-cert
   block. `run-app.ps1` → Ensure/Restart/Stop/Watch lifecycle over the cargo/Vite process, health probe
   stays `GET /api/health`, still respects `.dev-state.json`. `session-startup.ps1` → unchanged role.
   `dev-secrets.template.ps1` → Rust env vars (`AUTH0__*`, `COSMOS__ENDPOINT`, `STORAGE__CONNECTION`,
@@ -130,7 +130,7 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
   `/api/health`. `docker build` produces a runnable image that serves both API and SPA on one port.
   OpenAPI doc reachable; drift check passes against the committed generated client.
 
-### Task 2 — Cosmos preview-crate spike (de-risk architecture §7 #1)
+### Task 2 — Cosmos preview-crate spike (de-risk design.md — Risks: Cosmos preview SDK)
 **Scope**
 - `infrastructure`: `CosmosTaskRepository` impl of `TaskRepository` over **`azure_data_cosmos` 0.36
   (pinned exact)**; serde mapping of `Task` ↔ Cosmos doc (`id`, `ownerId`, fields, `_etag`); point read
@@ -181,13 +181,13 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
 **Acceptance / verification**
 - Log in via Auth0 (Google) → cookie set → protected endpoint returns owner-scoped data → `/api/me`
   reflects identity → logout clears session and redirects to Auth0 logout. **Prereq:** Auth0 tenant has
-  the Google social connection enabled (architecture §7 #4).
+  the Google social connection enabled (design.md — Risks: auth session strategy).
 
 ### Task 5 — App Insights telemetry seam
 **Scope**
 - `infrastructure`: single `init_telemetry()` owning the exporter — `tracing` → `opentelemetry` →
   **`opentelemetry-application-insights` 0.45**; the seam so the sink is swappable to OTLP→Collector
-  (architecture §7 #2). `api`: `tower-http` `TraceLayer` wired; health + request spans emitted with
+  (design.md — Risks: telemetry exporter maturity). `api`: `tower-http` `TraceLayer` wired; health + request spans emitted with
   owner/route context.
 - Local: telemetry **no-ops** when `APPLICATIONINSIGHTS_CONNECTION_STRING` is unset; cloud exports to App
   Insights. `web/`: optional `@microsoft/applicationinsights-web` client stub behind the same env.
@@ -202,7 +202,7 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
 - `web/`: **`vite-plugin-pwa`** (Workbox `generateSW`) — precache the built shell
   (`js,css,html,svg,png,ico,woff2`), `navigateFallback: '/index.html'`, `cleanupOutdatedCaches: true`,
   **`navigateFallbackDenylist`: `/^\/api\//`, `/^\/auth\//`, `/^\/swagger/`** (must not hijack the Auth0
-  callback — the exact Nucleus blocker), `registerType: 'prompt'` + update toast **gated on an empty
+  callback — the service-worker/OIDC-callback hijack landmine), `registerType: 'prompt'` + update toast **gated on an empty
   outbox**; complete manifest (`id`/`name`/`short_name`/`start_url`/`scope`/`display:standalone`/theme +
   icons with both `any` and `maskable`). **No runtime caching of `/api`.**
 - `web/src/offline/`: minimal owner-scoped **Dexie** stub — `db.ts` schema (`tasks`/`outbox`/`blobs`/
@@ -213,13 +213,13 @@ via `set-dev-state.ps1` per task; Bhaskar validates build/test; JARVIS handles a
 **Acceptance / verification**
 - App is installable (Lighthouse PWA pass) and boots offline (shell only); SW never serves cached
   `index.html` for `/api/*`, `/auth/*`, `/swagger`; Dexie DB is created owner-scoped and cleared on
-  logout. Confirms the two-layer split (Workbox shell vs app-managed data) from architecture §4.2.
+  logout. Confirms the two-layer split (Workbox shell vs app-managed data) from design.md — Offline-first & PWA.
 
 ### Task 7 — IaC (fresh Bicep) + managed identity + Key Vault + single Production deploy
 **Scope**
-- **`infra/`** (directory decision — see Notes & Decisions): `main.bicep` + `prod.main.bicepparam` +
-  `bicepconfig.json`.
-- Resources (architecture §6): **Azure Container Apps** (single container = API + SPA, external HTTPS
+- **`.arm/`** (directory decision — Mr. Das ruled `.arm/`, see Notes & Decisions): `main.bicep` +
+  `prod.main.bicepparam` + `bicepconfig.json`.
+- Resources (design.md — DevOps): **Azure Container Apps** (single container = API + SPA, external HTTPS
   ingress, min-replicas 0 scale-to-zero, **system-assigned managed identity**) + managed environment +
   **Log Analytics**; **Cosmos DB** (Core/SQL, **serverless**, Session consistency, db `tasklist`,
   container `tasks` PK `/ownerId`, data-plane RBAC Built-in Data Contributor to the app identity — no
@@ -254,15 +254,14 @@ report.
   `Checklist`, `LocationId`, `site visit`/`site engineer`.
 - **Bicep-Nucleus / infra residue:** any old `.arm/` resource names, Nucleus-specific param/resource
   identifiers, staging-stage references (we are single Production).
-- **Trunk naming:** `\bmaster\b` (should be `main` everywhere except legitimate historical prose).
+- **Trunk naming:** `\bmaster\b` (should be `main` everywhere).
 - Known current hits (from the planning scan, for reference): `.editorconfig`, `.gitignore`, `dev.ps1`,
   `run-app.ps1`, `.github/skills/*`, `.github/agents/jarvis.md`, `.github/copilot-instructions.md`,
-  `docs/architecture.md`. *(Tasks 1–7 rewrite most of these; the sweep verifies nothing was missed.)*
-- **Do NOT strip intentional historical references:** `docs/architecture.md` §2.2 is a deliberate
-  **.NET/Nucleus → Rust concept map**, and §7 contains process notes; these *legitimately* name Nucleus/
-  .NET/SVP/master as comparison. The sweep distinguishes "live config/script/CI/guardrail still describing
-  the .NET toolchain" (must fix) from "comparative/historical prose" (keep). `scripts/dev-secrets.local.ps1`
-  is git-ignored (not in the repo) — out of scope.
+  `docs/design.md`. *(Tasks 1–7 rewrite most of these; the sweep verifies nothing was missed.)*
+- **No historical-reference exception (Mr. Das override, 2026-07-08):** the former carve-out that kept a
+  legacy-stack → Rust concept map and process-note prose as "comparative/historical" is **revoked** — the
+  docs consolidation removed that prose, so the sweep now eliminates **every** live hit of these markers
+  (none are exempt as "historical"). `scripts/dev-secrets.local.ps1` is git-ignored (not in the repo) — out of scope.
 
 **(b) Internal-contradiction reconciliation:**
 - **Guardrail file `.github/copilot-instructions.md` (sanctioned edits — confirm with Mr. Das/JARVIS as
@@ -270,11 +269,11 @@ report.
   **utoipa OpenAPI → `openapi-typescript` generated TS client** (`web/src/ApiClient.generated.ts`; drop
   the `.cs`); confirm #1's `docs/design.md` exists (authored Task 1).
 - **Agent files** (`.github/agents/*.md`): reconcile any `master` → `main`.
-- **architecture.md ↔ this spec:** the IaC directory (`.arm/` in architecture §1/§6 vs **`infra/`** here)
-  — reconcile to one (see Notes & Decisions).
+- **design.md ↔ this spec:** ✅ RESOLVED — IaC dir ruled `.arm/` (matches design.md — Directory layout / DevOps);
+  no reconciliation needed. Verify Task 7 shipped Bicep under `.arm/` (not `infra/`).
 - **Skills ↔ scripts ↔ CI:** the build/test/run commands in `.github/skills/*` match the rewritten
   `scripts/*` and `ci.yml` (cargo + Vite, not dotnet).
-- **README ↔ design.md ↔ architecture.md:** stack, feature list, and hosting all agree (Rust/axum, React
+- **README ↔ design.md:** stack, feature list, and hosting all agree (Rust/axum, React
   19, Container Apps, Cosmos serverless, Auth0+Google cookie BFF, offline-first PWA).
 
 **Acceptance / verification**
@@ -288,44 +287,100 @@ report.
 _(Dave appends cross-cutting refactors here as tasks land — e.g. port-signature changes, shared-dep
 version bumps, config-loader evolution when the in-memory repo is swapped for Cosmos in Task 2.)_
 
+## Review Log
+
+### Task 1 — verification & design review (2026-07-07)
+- **Bhaskar (verify): PASS.** Backend gate (fmt / clippy `-D warnings` / **19 tests**) ✓; full frontend CI
+  (lint / typecheck / vitest 5 / build) ✓; OpenAPI drift byte-identical ✓; **`--no-cache` Linux `docker
+  build` ✓ and the container runs API+SPA on one port** (health 200, DIP `/api/tasks` 200).
+- **Dave (stabilize) — defects fixed during Task 1:** (a) `dev.ps1` launched Vite via a bare `npm` shim
+  that aborted the launcher before cargo ran → `npm.cmd`; (b) `run-app.ps1` 20-min stale→ready coercion
+  thrash-restarted the watch → removed, explicit `building`/`broken` now honored; (c) root manifest
+  `cargo.toml` → **`Cargo.toml`** (was breaking Linux CI + docker build).
+- **Anders (design review): APPROVE-WITH-SUGGESTIONS — nothing blocks.** Layering exact
+  (`domain ← application ← infrastructure/api`), both DIP seams genuinely exercised (Clock on health,
+  TaskRepository on `/api/tasks`, `owner` passed as a param so Cosmos/Auth swaps touch no `application`
+  code), all seams real (RFC7807, utoipa→openapi-typescript+drift gate, `TASKLIST_ENV`, SPA fallback),
+  **zero throwaway scaffolding**. Findings & pending decisions below.
+
+**Anders findings (Task 1):**
+- **F1 (MEDIUM, fix now):** `scripts/set-dev-state.ps1` (lines ~14–15) comment still documents the deleted
+  20-min coercion — a live doc-vs-code contradiction. Align once decision (ii) is ruled.
+- **F2 (LOW, Mr. Das's call):** `utoipa::ToSchema` derives live on `application` DTOs, while design.md's
+  crate-responsibilities table assigns utoipa to `api`. Passive compile-time metadata, no framework
+  coupling — accept + clarify the layering rule, or move `ToSchema` wrappers to `api` (more boilerplate).
+- **F3 (LOW):** `[profile.release] debug = true` bloats the container image (works against scale-to-zero
+  cold start); `strip`/split-debuginfo in the Docker runtime copy — keeps App Insights symbolication.
+- **Later-task watch-items (no action now):** Task 2 error seam must grow `Conflict` (412→409) + `ETag`
+  field; Task 4 swaps `AppState.demo_owner` → `UserContext` extractor (clean); **Task 6 PWA MUST set
+  `navigateFallbackDenylist` for `/api/`,`/auth/`,`/swagger`** (the service-worker/OIDC-callback hijack landmine); config
+  loader hand-rolled for now (revisit `figment`/`config` when Cosmos/Auth0 settings arrive).
+
+**✅ Decisions RULED by Mr. Das (2026-07-08):**
+1. **(i) Health body:** KEEP `{status,time}` (Clock-port DIP proof). The merged design doc states it as the
+   authoritative health contract; reconcile the bootstrap.md `{status:"ok"}` shorthand.
+2. **(ii) Liveness safety valve:** Anders' rec — **lifecycle reset**: `session-startup.ps1` clears a stale
+   `building`/`broken` → `ready` on fresh session boot (no time-based coercion). F1 comment aligned to match.
+3. **(F2) Layering:** KEEP idiomatic — `ToSchema` allowed on `application` DTOs; clarifying line added to the
+   layering rule (design.md — Hard rules / crate responsibilities). (F3 strip-symbols: deferred to Task 5/7 where symbolication is set up.)
+
+**📄 Docs consolidation directive (Mr. Das 2026-07-08):** merge the two design docs into ONE authoritative
+`docs/design.md`; **drop ALL C#/.NET & Nucleus references from every doc** (this OVERRIDES the earlier
+Task-8 "keep intentional historical concept map" exception — Mr. Das wants them gone); **drop library/version
+references from the architecture content** (patterns/seams stay; concrete crate + version choices live in
+Cargo.toml + the feature specs). Flow: Anders plans → Dave implements (incl. updating every inbound
+reference) → Bhaskar verifies (no broken links / no residue) → Anders reviews.
+
+### Docs consolidation + governance scrub (2026-07-08)
+- **Dave:** merged `docs/architecture.md` → `docs/design.md` (deleted architecture.md); purged all C#/.NET/Nucleus;
+  de-libraried (core stack Rust·axum·React·TS·Vite kept, versionless; all else role-described → Cargo.toml/package.json);
+  inserted the two rulings; fixed every inbound ref; `master→main` in docs; added the README "agentic loop" section + personas.
+- **JARVIS (sanctioned, Mr. Das-approved):** scrubbed governance files — `copilot-instructions.md` #3 `master→main`,
+  #5 `*.generated.cs`/nswag → utoipa→openapi-typescript; `agents/jarvis.md` dotnet→cargo/Vite, ADO PAT→`gh` CLI,
+  wrong `dilligenzvaluation/nucleus` pipeline URL → GitHub Actions, stage→prod → single Production, `master→main`;
+  `agents/anders.md` `master→main`. (Trunk confirmed = `main`.)
+- **Bhaskar: PASS** — zero dangling `architecture.md` refs, residue confined to sanctioned bootstrap.md marker/playbook strings,
+  all links resolve, both rulings present, core stack versionless with no crate leakage, `cargo build` green.
+- **Anders: APPROVE-WITH-SUGGESTIONS** — faithful/coherent merge; three critical risks retained their teeth; ToSchema wording
+  **ruled accept-as-is**; P1–P4 optional polish only (P1: one-line CORS reconcile in rule #7/hardening — non-blocking).
+
 ## Notes & Decisions
 
-**Settled rulings (from `docs/architecture.md`, Mr. Das 2026-07-06 — carried into this spec):**
+**Settled rulings (Mr. Das 2026-07-06, now in `docs/design.md` — carried into this spec):**
 - **Auth:** cookie-based **server-side session (BFF)** with **Auth0 OIDC + Google social connection**;
   SPA stores no tokens. Encrypted cookie-stored session (signing key from Key Vault) — survives Container
-  Apps scale-to-zero / multi-replica; Cosmos-backed store is the scale-out alternative. (arch §5, §7 #4)
+  Apps scale-to-zero / multi-replica; Cosmos-backed store is the scale-out alternative. (design.md — Application-wide patterns: auth/session; Risks)
 - **Persistence:** **preview `azure_data_cosmos` 0.36 accepted as the primary adapter**, kept behind the
   `TaskRepository` port as the swap seam; emulator etag round-trip must be proven in Task 2 before
-  building on it. (arch §0, §7 #1)
-- **Hosting:** **Azure Container Apps** (scale-to-zero), single container serving API + SPA. (arch §7 #5)
+  building on it. (design.md — Risks: Cosmos preview SDK)
+- **Hosting:** **Azure Container Apps** (scale-to-zero), single container serving API + SPA. (design.md — DevOps; Risks)
 - **Secrets/identity:** **managed identity** for Cosmos + Blob data-plane (keyless, prod); **Key Vault**
   for the Auth0 client secret + session signing key, surfaced as Container Apps secrets via **Key Vault
-  references**; **no secrets in env or repo**; emulator/Azurite well-known creds only locally. (arch §7 #7)
+  references**; **no secrets in env or repo**; emulator/Azurite well-known creds only locally. (design.md — Application-wide patterns: config/secrets)
 - **Local dev:** Cosmos **emulator** + **Azurite** via docker-compose as the first-class local backing
   store; `TASKLIST_ENV=local|cloud` toggle; `/api/health` contract + `set-dev-state.ps1`/`.dev-state.json`
-  lifecycle preserved (liveness watch + Dave guardrail #8 depend on them). (arch §6)
+  lifecycle preserved (liveness watch + Dave guardrail #8 depend on them). (design.md — DevOps: local dev)
 - **Offline-first PWA:** in scope, no fundamental clash with per-user Cosmos; two-layer split (Workbox
   app-shell vs app-managed Dexie data engine); SW **denylists** `/api/*`, `/auth/*`, `/swagger`; bootstrap
-  ships the installable shell + Dexie stub only (full pull/push/flush is a later feature). (arch §4, §7 #6)
+  ships the installable shell + Dexie stub only (full pull/push/flush is a later feature). (design.md — Offline-first & PWA)
 - **Conflicts:** **last-writer-wins scoped to the owner's own devices** (etag/`If-Match` → 412→409 →
   re-pull → explicit retry re-stamps fresh etag); no CRDT/field-merge (YAGNI). Not exercised in bootstrap
-  beyond the etag round-trip. (arch §4.6, §7 #8)
+  beyond the etag round-trip. (design.md — Offline-first & PWA: conflict resolution)
 - **Client offline id minting:** offline-created tasks get a **client-side uuidv7 id** = Cosmos doc id →
-  idempotent first-sync create. (arch §4.1b) — scaffolding present via the Dexie stub in Task 6.
+  idempotent first-sync create. (design.md — Offline-first & PWA: offline id minting) — scaffolding present via the Dexie stub in Task 6.
 
 **Decisions made in this spec (please confirm / veto):**
-- **IaC directory = `infra/`** (not architecture.md's `.arm/`). Rationale: `.arm/` is an ARM-template-era
-  Nucleus-ism; we ship **Bicep**, and `infra/` is the modern, tool-aligned (azd) convention — and the old
-  `.arm/` was deleted. **Consequence:** architecture.md §1 and §6 still say `.arm/`; Task 8 reconciles
-  those two references to `infra/`. *(If Mr. Das prefers zero churn on the finalized architecture doc,
-  keep `.arm/` instead — one-word flip in Task 7 + Task 8.)*
+- **IaC directory = `.arm/`** — **RULED by Mr. Das 2026-07-07** (chose zero churn on the finalized
+  `docs/design.md`, which specifies `.arm/` under Directory layout / DevOps). Bicep files live under `.arm/`.
+  **Consequence:** no design.md reconciliation needed in Task 8 for this item; Task 7 authors Bicep
+  under `.arm/`. *(The `infra/` alternative — azd-convention rename — was considered and declined.)*
 - **Skeleton repo swap order:** Task 1 uses the **in-memory** `TaskRepository`; Task 2 swaps in Cosmos.
   This is deliberate so DIP is provable before the preview SDK is introduced.
 
 **Open items for Mr. Das to confirm before Dave starts Task 1:**
 1. **Auth0 tenant:** Google social connection enabled + a callback/app registration available (needed
    Task 4, but provision early).
-2. **IaC directory:** `infra/` (recommended) vs `.arm/` — see decision above.
+2. **IaC directory:** ✅ RESOLVED — `.arm/` (Mr. Das, 2026-07-07). See decision above.
 3. **Toolchain pins:** Rust ≥ 1.88 (required by `azure_data_cosmos` driver) and Node 20/22 LTS — confirm
    the CI/dev toolchain versions.
 4. **Docker locally:** the Cosmos DB **Linux** emulator has known feature/stability caveats; confirm

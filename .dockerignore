@@ -1,0 +1,12 @@
+# Rust / Node build artifacts — rebuilt inside the image.
+**/target
+**/node_modules
+web/dist
+
+# VCS + local dev state.
+.git
+.gitignore
+scripts/.dev-app.pid
+scripts/.liveness-watch.pid
+scripts/liveness-watch.log
+scripts/dev-secrets.local.ps1

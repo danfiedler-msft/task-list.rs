@@ -1,0 +1,134 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "task-list.rs API",
+    "description": "Walking-skeleton API for the task-list.rs clean-architecture starter.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Service is live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "operationId": "list_tasks",
+        "responses": {
+          "200": {
+            "description": "The caller's tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "description": "Health payload. `status` is always `ok`; `time` is sourced through the `Clock` port,\nproving that seam is wired end to end.",
+        "required": [
+          "status",
+          "time"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `\"ok\"` when the service is live."
+          },
+          "time": {
+            "type": "string",
+            "description": "Server time (RFC3339)."
+          }
+        }
+      },
+      "TaskDto": {
+        "type": "object",
+        "description": "Transport representation of a [`Task`]. Timestamps are RFC3339 strings so the shape is\nstable across the OpenAPI boundary (and the generated TypeScript client).",
+        "required": [
+          "id",
+          "owner",
+          "title",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "description": "RFC3339 creation timestamp."
+          },
+          "id": {
+            "type": "string",
+            "description": "uuidv7 identifier."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Owner (Auth0 subject)."
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatusDto"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "RFC3339 last-update timestamp."
+          }
+        }
+      },
+      "TaskStatusDto": {
+        "type": "string",
+        "description": "Transport representation of [`TaskStatus`].",
+        "enum": [
+          "todo",
+          "inProgress",
+          "done"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness"
+    },
+    {
+      "name": "tasks",
+      "description": "Task queries"
+    }
+  ]
+}
