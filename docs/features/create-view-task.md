@@ -93,7 +93,7 @@ Bhaskar validates; Anders design-reviews; JARVIS handles all git.
 |---|------------------|--------|--------|
 | 0 | **Persistence foundation (carried from the Cosmos spike).** Commit the already-built `TaskRepository` create/get/update + `CosmosTaskRepository` + `Task.version` ETag + `ApplicationError::Conflict`(409) + CI integration job (Linux emulator container) that came over from bootstrap. Verify green (fmt/clippy/tests, drift). | Pending | - |
 | 1 | **Backend create endpoint.** application: `CreateTaskRequest` DTO + `tasks::create` use-case (validate title, mint id, default `Todo`, clock, `repo.create`) + unit tests vs in-memory fake. api: `POST /api/tasks` → 201 `TaskDto` (400 on invalid), utoipa path + schema, regen `openapi.json` + typed client (drift green), axum HTTP tests (201 / 400 / then-listed). | ✅ Done | (feature PR) |
-| 2 | **Create form + task list UI.** web: `createTask` in the façade (+POST JSON in `apiFetch`); Tasks page — create-form (client-side title validation mirroring the domain) + list with loading/empty/error, **optimistic append** on success; replace skeleton cards. Unit tests for form + list states. | Pending | - |
+| 2 | **Create form + task list UI.** web: `createTask` in the façade (+POST JSON in `apiFetch`); Tasks page — create-form (client-side title validation mirroring the domain) + list with loading/empty/error, **optimistic append** on success; replace skeleton cards. Unit tests for form + list states. | ✅ Done | (feature PR) |
 | 3 | **Local-dev Cosmos gate + native-Windows docs.** `session-startup.ps1`: a **conditional** preflight that waits for the Cosmos emulator only when the local app runs in Cosmos mode (`TASKLIST_PERSISTENCE=cosmos`) — never blocks the default in-memory loop; probe the **native Windows Cosmos DB Emulator** (`https://localhost:8081`). README: **native Windows** emulator install/start steps. No domain/app/api code; hermetic tests/CI unchanged. | Pending | - |
 
 *(Task 0 lands the carried-forward foundation; Tasks 1–2 are verifiable on the in-memory default immediately;
@@ -134,6 +134,24 @@ _(from the carried-forward Cosmos spike — to be committed in Task 0)_
   missing `Content-Type`→415; malformed JSON / missing-blank-wrong-type field / bytes→400 (no bare 422);
   201 + domain-invalid-400 unchanged. OpenAPI documents 201/400/415; client regenerated. **Bhaskar re-verify:
   PASS** (api http 7→10, drift byte-identical, web gate green, seam genuinely shared, no layering regression).
+
+### Task 2 — create-form + task list UI (2026-07-09)
+- **Bhaskar (verify): PASS** — web gate green (lint/typecheck/**test:ci 27/27**/build); backend + generated client +
+  openapi.json untouched (empty diff); behavior confirmed: Content-Type only on bodied requests + RFC7807 detail
+  surfaced; `validateTitle` mirrors the domain rule (trim/non-blank/1..=200 **code points**, incl. emoji ×200/×201
+  boundary); **append-on-success** (no refetch, list untouched + input preserved on failure); four list states;
+  mobile-first CSS; no flaky tests (guardrail #8).
+- **Anders (design review): APPROVE-WITH-SUGGESTIONS** — faithful to Option 1; clean frontend layering (pure
+  validation / data hook / presentational / apiFetch seam); Finding 3 (Content-Type) correctly at the seam.
+  - **Finding 1 (fixed + re-verified):** create-during-initial-load race in `useTasks` — a stale initial load
+  could clobber a just-created task (widened by scale-to-zero cold starts). Dave guarded it (functional
+  setState keyed on `prev.status`: stale load **merges deduped-underneath**; stale load **error can't mask** a
+  create) — form stays usable during cold start. +2 deterministic tests (**29/29**). **Bhaskar re-verify: PASS**.
+  - **Finding 2 (Anders ruled, accept):** client/server title-validation duplication is intentional UX mirroring;
+  server stays the boundary; degrades gracefully. *(Optional deferred: utoipa `#[schema(max_length=200)]` if drift ever bites.)*
+  - **Findings 3–4 (forward notes):** the `apiFetch`/`useTasks` seam is the correct pivot for the future offline
+  model (client-minted uuidv7 + outbox will slot behind it with no presentational change); `ApiError` keeps
+  `status` so a future 409 conflict flow can branch. No action now.
 
 ## Notes & Decisions
 
