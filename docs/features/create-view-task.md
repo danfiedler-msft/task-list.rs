@@ -1,6 +1,6 @@
 # Work Item: Create a task and show it
 **Branch:** vibe/create-view-task
-**Status:** In Progress
+**Status:** Complete
 
 > **Intent (Mr. Das's words):** *"Create a task and show it."* The first real product feature on top of the
 > walking skeleton: a user creates a task and sees it displayed. **Out of scope — deferred to later
@@ -91,10 +91,10 @@ Bhaskar validates; Anders design-reviews; JARVIS handles all git.
 
 | # | Task Description | Status | Commit |
 |---|------------------|--------|--------|
-| 0 | **Persistence foundation (carried from the Cosmos spike).** Commit the already-built `TaskRepository` create/get/update + `CosmosTaskRepository` + `Task.version` ETag + `ApplicationError::Conflict`(409) + CI integration job (Linux emulator container) that came over from bootstrap. Verify green (fmt/clippy/tests, drift). | Pending | - |
+| 0 | **Persistence foundation (carried from the Cosmos spike).** Commit the already-built `TaskRepository` create/get/update + `CosmosTaskRepository` + `Task.version` ETag + `ApplicationError::Conflict`(409) + CI integration job (Linux emulator container) that came over from bootstrap. Verify green (fmt/clippy/tests, drift). | ✅ Done | f1fbcd4 |
 | 1 | **Backend create endpoint.** application: `CreateTaskRequest` DTO + `tasks::create` use-case (validate title, mint id, default `Todo`, clock, `repo.create`) + unit tests vs in-memory fake. api: `POST /api/tasks` → 201 `TaskDto` (400 on invalid), utoipa path + schema, regen `openapi.json` + typed client (drift green), axum HTTP tests (201 / 400 / then-listed). | ✅ Done | (feature PR) |
 | 2 | **Create form + task list UI.** web: `createTask` in the façade (+POST JSON in `apiFetch`); Tasks page — create-form (client-side title validation mirroring the domain) + list with loading/empty/error, **optimistic append** on success; replace skeleton cards. Unit tests for form + list states. | ✅ Done | (feature PR) |
-| 3 | **Local-dev Cosmos gate + native-Windows docs.** `session-startup.ps1`: a **conditional** preflight that waits for the Cosmos emulator only when the local app runs in Cosmos mode (`TASKLIST_PERSISTENCE=cosmos`) — never blocks the default in-memory loop; probe the **native Windows Cosmos DB Emulator** (`https://localhost:8081`). README: **native Windows** emulator install/start steps. No domain/app/api code; hermetic tests/CI unchanged. | Pending | - |
+| 3 | **Local-dev Cosmos gate + native-Windows docs.** `session-startup.ps1`: a **conditional** preflight that waits for the Cosmos emulator only when the local app runs in Cosmos mode (`TASKLIST_PERSISTENCE=cosmos`) — never blocks the default in-memory loop; probe the **native Windows Cosmos DB Emulator** (`https://localhost:8081`). README: **native Windows** emulator install/start steps. No domain/app/api code; hermetic tests/CI unchanged. | ✅ Done | (feature PR) |
 
 *(Task 0 lands the carried-forward foundation; Tasks 1–2 are verifiable on the in-memory default immediately;
 Task 3 adds the opt-in Cosmos gate + docs.)*
@@ -154,6 +154,30 @@ _(from the carried-forward Cosmos spike — to be committed in Task 0)_
   `status` so a future 409 conflict flow can branch. No action now.
 
 ## Notes & Decisions
+
+### Task 3 — conditional Cosmos wait-gate + native-Windows docs (2026-07-09)
+- **Bhaskar (verify): PASS** — scope confined to 3 files (`scripts/cosmos-preflight.ps1` new, `session-startup.ps1`,
+  `README.md`); backend **45** / web **29** green; OpenAPI drift clean; in-memory default skips in 126ms (no probe),
+  cosmos-down emits the actionable message and times out **advisory-only (never blocks the watch)**;
+  case-insensitive mode resolution + full caller-env restore; wiring non-invasive (health/dev-state/lifecycle
+  contracts untouched); cert claim verified against `cosmos.rs`. No watch left running.
+- **Anders (design review): APPROVE** — closes the feature design-wise. Conditional gate faithfully realizes the
+  in-memory-default / Cosmos-opt-in reconciliation; env hygiene + fresh-boot wiring correct; native-Windows-local
+  vs Docker-Linux-CI split coherent.
+  - **Finding 1 (confirmed w/ Mr. Das):** default local "show it" is **ephemeral** (in-memory) — durable across
+    restarts is the one-line opt-in `TASKLIST_PERSISTENCE=cosmos`. This is the trade Mr. Das chose knowingly.
+  - **Finding 2 (forward note):** local (native Windows) vs CI (Docker Linux) are distinct emulator builds — keep
+    the *proving* etag/conflict integration tests pinned to the CI emulator; treat local as demo convenience.
+  - **Finding 3 (Anders ruled, leave as-is):** the cosmos-down wall-clock overshoot (≤ one 5s probe past the
+    deadline) is cosmetic/bounded — YAGNI to cap.
+
+### Feature close-out
+"Create a task and show it" is **complete** — Task 0 (Cosmos persistence foundation) → Task 1 (POST create endpoint
++ RFC7807 body-rejection seam) → Task 2 (create-form + list UI, append-on-success) → Task 3 (conditional local-dev
+Cosmos gate + docs). Option 1 realized end-to-end. Cleanly deferred behind established seams: detail route,
+update/delete, image association, offline/PWA.
+
+## Notes & Decisions — original
 
 **Rulings by Mr. Das (2026-07-08):**
 - **View shape:** **list-only** (reuse `GET /api/tasks`); no detail route this feature.
