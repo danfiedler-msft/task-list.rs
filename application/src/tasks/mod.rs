@@ -27,7 +27,9 @@ mod tests {
     use super::*;
 
     /// Hand-written in-crate fake of the repository port — proves the use-case runs
-    /// against any `TaskRepository` implementation.
+    /// against any `TaskRepository` implementation. Only `list`/`get` are exercised by
+    /// these tests; `create`/`update` echo their input (the etag-conflict semantics are
+    /// covered against the in-memory adapter in the `infrastructure` crate).
     #[derive(Default)]
     struct FakeRepo {
         tasks: Vec<Task>,
@@ -42,6 +44,22 @@ mod tests {
                 .filter(|t| &t.owner == owner)
                 .cloned()
                 .collect())
+        }
+
+        async fn get(&self, owner: &UserId, id: &TaskId) -> Result<Task, ApplicationError> {
+            self.tasks
+                .iter()
+                .find(|t| &t.owner == owner && &t.id == id)
+                .cloned()
+                .ok_or(ApplicationError::NotFound)
+        }
+
+        async fn create(&self, task: &Task) -> Result<Task, ApplicationError> {
+            Ok(task.clone())
+        }
+
+        async fn update(&self, task: &Task) -> Result<Task, ApplicationError> {
+            Ok(task.clone())
         }
     }
 

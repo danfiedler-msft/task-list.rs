@@ -61,6 +61,9 @@ impl From<ApplicationError> for ApiError {
                 Some(domain.to_string()),
             ),
             ApplicationError::NotFound => ApiError::new(StatusCode::NOT_FOUND, "Not Found", None),
+            ApplicationError::Conflict => {
+                ApiError::new(StatusCode::CONFLICT, "Conflict", Some(error.to_string()))
+            }
             // Never leak internal repository details to the client.
             ApplicationError::Repository(_) => ApiError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -68,5 +71,32 @@ impl From<ApplicationError> for ApiError {
                 None,
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conflict_maps_to_409() {
+        let api: ApiError = ApplicationError::Conflict.into();
+        assert_eq!(api.status, StatusCode::CONFLICT);
+        assert_eq!(api.title, "Conflict");
+        assert!(api.detail.is_some());
+    }
+
+    #[test]
+    fn not_found_maps_to_404_without_detail() {
+        let api: ApiError = ApplicationError::NotFound.into();
+        assert_eq!(api.status, StatusCode::NOT_FOUND);
+        assert!(api.detail.is_none());
+    }
+
+    #[test]
+    fn repository_error_maps_to_500_without_leaking_detail() {
+        let api: ApiError = ApplicationError::Repository("secret db url".to_owned()).into();
+        assert_eq!(api.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(api.detail.is_none(), "internal details must not leak");
     }
 }
